@@ -32,15 +32,19 @@ export class FavoriteParksService {
 
     /**
      * Delete a favorite park.
-     * @param id - The id of the favorite park to delete.
+     * @param userId - The user id of the favorite park to delete.
+     * @param parkId - The park id of the favorite park to delete.
      * @returns The deleted favorite park. If no favorite park is found, returns null.
      */
-    async deleteFavoritePark(id: number): Promise<number | null> {
+    async deleteFavoritePark(
+        userId: number,
+        parkId: number,
+    ): Promise<number | null> {
         const deleted = await db.favoritePark.delete({
-            where: { id },
+            where: { userId_parkId: { userId, parkId } },
         });
         if (!deleted) return null;
-        return id;
+        return deleted.id;
     }
 }
 

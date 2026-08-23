@@ -32,15 +32,19 @@ export class FavoriteTrailsService {
 
     /**
      * Delete a favorite trail.
-     * @param id - The id of the favorite trail to delete.
+     * @param userId - The user id of the favorite trail to delete.
+     * @param trailId - The trail id of the favorite trail to delete.
      * @returns The deleted favorite trail. If no favorite trail is found, returns null.
      */
-    async deleteFavoriteTrail(id: number): Promise<number | null> {
+    async deleteFavoriteTrail(
+        userId: number,
+        trailId: number,
+    ): Promise<number | null> {
         const deleted = await db.favoriteTrail.delete({
-            where: { id },
+            where: { userId_trailId: { userId, trailId } },
         });
         if (!deleted) return null;
-        return id;
+        return deleted.id;
     }
 }
 
