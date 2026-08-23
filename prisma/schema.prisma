@@ -1,0 +1,82 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+enum Difficulty {
+  easy
+  medium
+  hard
+  expert
+}
+
+enum Role {
+  admin
+  user
+}
+
+model Region {
+  id          Int     @id @default(autoincrement())
+  name        String
+  description String
+  parks       Park[]
+}
+
+model Park {
+  id           Int            @id @default(autoincrement())
+  name         String
+  description  String
+  location     Unsupported("geometry(Point, 4326)")
+  regionId     Int
+  region       Region         @relation(fields: [regionId], references: [id])
+  trails       Trail[]
+  favoritedBy  FavoritePark[]
+}
+
+model Trail {
+  id            Int             @id @default(autoincrement())
+  name          String
+  description   String
+  parkId        Int
+  park          Park            @relation(fields: [parkId], references: [id])
+  difficulty    Difficulty
+  length        Int
+  elevationChange Int
+  duration      Int
+  trailhead     Unsupported("geometry(Point, 4326)")
+  favoritedBy   FavoriteTrail[]
+}
+
+model User {
+  id             Int             @id @default(autoincrement())
+  username       String 
+  email          String          @unique
+  firebaseUid    String          @unique
+  role           Role            @default(user)
+  favoriteParks  FavoritePark[]
+  favoriteTrails FavoriteTrail[]
+}
+
+model FavoritePark {
+  id     Int  @id @default(autoincrement())
+  userId Int
+  parkId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  park   Park @relation(fields: [parkId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, parkId])
+}
+
+model FavoriteTrail {
+  id      Int   @id @default(autoincrement())
+  userId  Int
+  trailId Int
+  user    User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trail   Trail @relation(fields: [trailId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, trailId])
+}

@@ -9,8 +9,7 @@ import { PointSchema } from "./geo";
  * @param parkId - The unique identifier of the park the trail belongs to.
  * @param difficulty - The difficulty of the trail.
  * @param length - The length of the trail.
- * @param elevationGain - The elevation gain of the trail.
- * @param elevationLoss - The elevation loss of the trail.
+ * @param elevationChange - The elevation change of the trail.
  * @param duration - The duration of the trail.
  * @param trailhead - The trailhead of the trail.
  */
@@ -21,8 +20,7 @@ export const TrailSchema = z.object({
     parkId: z.number().optional(),
     difficulty: z.enum(["easy", "medium", "hard", "expert"]),
     length: z.number().positive(),
-    elevationGain: z.number().positive(),
-    elevationLoss: z.number().positive(),
+    elevationChange: z.number().positive(),
     duration: z.number().positive(),
     trailhead: PointSchema.optional(),
 });
@@ -40,8 +38,7 @@ export type Trail = z.infer<typeof TrailSchema>;
  * @param parkId - The unique identifier of the park the trail belongs to.
  * @param difficulty - The difficulty of the trail.
  * @param length - The length of the trail.
- * @param elevationGain - The elevation gain of the trail.
- * @param elevationLoss - The elevation loss of the trail.
+ * @param elevationChange - The elevation change of the trail.
  * @param duration - The duration of the trail.
  * @param trailhead - The trailhead of the trail.
  */
@@ -55,9 +52,8 @@ export const TrailUpdateSchema = TrailSchema.partial();
  * @param parkId - The unique identifier of the park the trail belongs to.
  * @param difficulty - The difficulty of the trail.
  * @param length - The length of the trail.
- * @param elevationGain - The elevation gain of the trail.
- * @param elevationLoss - The elevation loss of the trail.
- * @param duration - The duration of the trail.
+ * @param elevationChange - The elevation change of the trail.
+ * @param duration  The duration of the trail.
  * @param trailhead - The trailhead of the trail.
  */
 export type TrailUpdate = z.infer<typeof TrailUpdateSchema>;
