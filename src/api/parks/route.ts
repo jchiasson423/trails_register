@@ -1,7 +1,7 @@
 import { errorResponse, successResponse } from "@/lib/api_response";
 import { authenticateAndSyncUser } from "@/lib/auth.middleware";
 import { roleMiddleware } from "@/lib/role.middleware";
-import { parksService } from "@/lib/services/parks.service";
+import { parksService } from "@/lib/backend_services/parks.service";
 import { PointCoordinatesSchema } from "@/lib/validations/geo";
 import { ParkSchema } from "@/lib/validations/park";
 import { User } from "@/lib/validations/user";

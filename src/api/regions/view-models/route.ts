@@ -1,5 +1,5 @@
 import { successResponse } from "@/lib/api_response";
-import { regionsService } from "@/lib/services/regions.service";
+import { regionsService } from "@/lib/backend_services/regions.service";
 
 /**
  * /regions/view-models GET

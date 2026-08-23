@@ -1,3 +1,5 @@
+"use server";
+
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "../db";
 import { Region, RegionUpdate } from "@/lib/validations/region";

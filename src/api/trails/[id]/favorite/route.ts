@@ -1,6 +1,6 @@
 import { errorResponse, successResponse } from "@/lib/api_response";
 import { authenticateAndSyncUser } from "@/lib/auth.middleware";
-import { favoriteTrailsService } from "@/lib/services/favorite_trails.service";
+import { favoriteTrailsService } from "@/lib/backend_services/favorite_trails.service";
 import { User } from "@/lib/validations/user";
 
 type Context = {

@@ -1,5 +1,5 @@
 import { errorResponse, successResponse } from "@/lib/api_response";
-import { regionsService } from "@/lib/services/regions.service";
+import { regionsService } from "@/lib/backend_services/regions.service";
 
 type Context = {
     params: Promise<{ id: string }>;

@@ -1,5 +1,7 @@
-import { firebaseAuthService } from "./services/firebase_auth.service";
-import { usersService } from "./services/users.service";
+"use server";
+
+import { firebaseAuthService } from "./backend_services/firebase_auth.service";
+import { usersService } from "./backend_services/users.service";
 import { User } from "./validations/user";
 
 /**

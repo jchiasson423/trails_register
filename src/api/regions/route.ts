@@ -1,7 +1,7 @@
 import { errorResponse, successResponse } from "@/lib/api_response";
 import { authenticateAndSyncUser } from "@/lib/auth.middleware";
 import { roleMiddleware } from "@/lib/role.middleware";
-import { regionsService } from "@/lib/services/regions.service";
+import { regionsService } from "@/lib/backend_services/regions.service";
 import { RegionSchema } from "@/lib/validations/region";
 import { User } from "@/lib/validations/user";
 

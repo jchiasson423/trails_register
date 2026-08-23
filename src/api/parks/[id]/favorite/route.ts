@@ -1,6 +1,6 @@
 import { errorResponse, successResponse } from "@/lib/api_response";
 import { authenticateAndSyncUser } from "@/lib/auth.middleware";
-import { favoriteParksService } from "@/lib/services/favorite_parks.service";
+import { favoriteParksService } from "@/lib/backend_services/favorite_parks.service";
 import { User } from "@/lib/validations/user";
 
 type Context = {

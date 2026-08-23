@@ -1,3 +1,5 @@
+"use server";
+
 import { Prisma } from "@/generated/prisma/client";
 import { Point, PointCoordinates, PointSchema } from "@/lib/validations/geo";
 
@@ -5,10 +7,7 @@ import { Point, PointCoordinates, PointSchema } from "@/lib/validations/geo";
  * Build a PostGIS point from lon/lat (SRID 4326).
  * Column identifiers must be trusted literals — never user input.
  */
-export function makePointSql(
-    longitude: number,
-    latitude: number,
-): Prisma.Sql {
+export function makePointSql(longitude: number, latitude: number): Prisma.Sql {
     return Prisma.sql`ST_SetSRID(ST_MakePoint(${longitude}, ${latitude}), 4326)`;
 }
 

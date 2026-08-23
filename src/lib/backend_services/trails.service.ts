@@ -1,3 +1,5 @@
+"use server";
+
 import { Difficulty, Prisma } from "@/generated/prisma/client";
 import { db } from "../db";
 import { PointCoordinates } from "@/lib/validations/geo";

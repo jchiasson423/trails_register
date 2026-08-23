@@ -1,3 +1,5 @@
+"use server";
+
 import { User, UserUpdate } from "@/lib/validations/user";
 import { db } from "../db";
 

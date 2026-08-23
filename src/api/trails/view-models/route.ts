@@ -1,6 +1,6 @@
 import { successResponse } from "@/lib/api_response";
 import { authenticateAndSyncUser } from "@/lib/auth.middleware";
-import { trailsService } from "@/lib/services/trails.service";
+import { trailsService } from "@/lib/backend_services/trails.service";
 import { PointCoordinatesSchema } from "@/lib/validations/geo";
 import { User } from "@/lib/validations/user";
 

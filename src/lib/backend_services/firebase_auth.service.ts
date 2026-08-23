@@ -1,3 +1,5 @@
+"use server";
+
 import { adminAuth } from "@/lib/firebase_admin";
 import { DecodedIdToken } from "firebase-admin/auth";
 

@@ -1,6 +1,6 @@
 import { errorResponse, successResponse } from "@/lib/api_response";
 import { authenticateAndSyncUser } from "@/lib/auth.middleware";
-import { parksService } from "@/lib/services/parks.service";
+import { parksService } from "@/lib/backend_services/parks.service";
 import { User } from "@/lib/validations/user";
 
 /**

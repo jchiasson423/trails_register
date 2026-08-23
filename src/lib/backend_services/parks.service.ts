@@ -1,3 +1,5 @@
+"use server";
+
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "../db";
 import { Park, ParkSchema, ParkUpdate } from "@/lib/validations/park";
