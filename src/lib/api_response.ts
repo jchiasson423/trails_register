@@ -6,8 +6,8 @@ import { ZodError } from "zod";
  * @param data - The data to be returned.
  * @returns The response with the data.
  */
-export function successResponse<T>(data: T): NextResponse {
-    return NextResponse.json({ data }, { status: 200 });
+export function successResponse<T>(data: T, code: number = 200): NextResponse {
+    return NextResponse.json({ data }, { status: code });
 }
 
 /**
@@ -15,7 +15,10 @@ export function successResponse<T>(data: T): NextResponse {
  * @param error - The error to be returned.
  * @returns The response with the error message.
  */
-export function errorResponse(error: unknown): NextResponse {
+export function errorResponse(
+    error: unknown,
+    code: number = 500,
+): NextResponse {
     if (error instanceof ZodError) {
         // Validation error response
         return NextResponse.json(
@@ -27,13 +30,13 @@ export function errorResponse(error: unknown): NextResponse {
                     message: err.message,
                 })),
             },
-            { status: 400 },
+            { status: code },
         );
     }
 
     // Internal error response
     return NextResponse.json(
         { success: false, message: "An internal error occurred" },
-        { status: 500 },
+        { status: code },
     );
 }

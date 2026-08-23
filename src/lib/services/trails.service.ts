@@ -1,4 +1,5 @@
-import { Difficulty, Prisma, PrismaClient } from "@/generated/prisma/client";
+import { Difficulty, Prisma } from "@/generated/prisma/client";
+import { db } from "../db";
 import { PointCoordinates, PointSchema } from "@/lib/validations/geo";
 import { Trail, TrailSchema, TrailUpdate } from "@/lib/validations/trail";
 import {
@@ -8,10 +9,7 @@ import {
 
 /**
  * TrailsService for the trail entity. This service is used to create, update, and get trails from the database.
- * @param db - The database client.
- *
  * @example
- * const trailsService = new TrailsService(db);
  * const trail = await trailsService.createTrail({
  *     name: "Trail 1",
  *     description: "Description 1",
@@ -25,15 +23,13 @@ import {
  * console.log(trail);
  */
 export class TrailsService {
-    constructor(private readonly db: PrismaClient) {}
-
     /**
      * Create a new trail.
      * @param trail - The trail to create.
      * @returns The created trail. If the trail already exists, returns null.
      */
     async createTrail(trail: Trail): Promise<Trail | null> {
-        const [created] = await this.db.$queryRaw<
+        const [created] = await db.$queryRaw<
             Array<{
                 id: number;
                 name: string;
@@ -158,7 +154,7 @@ export class TrailsService {
                 ST_X(trailhead::geometry) AS lng;
         `;
 
-        const [updated] = await this.db.$queryRaw<
+        const [updated] = await db.$queryRaw<
             Array<{
                 id: number;
                 name: string;
@@ -199,7 +195,7 @@ export class TrailsService {
      * @returns The deleted trail. If no trail is found, returns null.
      */
     async deleteTrail(id: number): Promise<number | null> {
-        const deleted = await this.db.trail.delete({
+        const deleted = await db.trail.delete({
             where: { id },
         });
         if (!deleted) return null;
@@ -227,7 +223,7 @@ export class TrailsService {
                 FROM "Trail" 
                 WHERE "id" = ${id}
         `;
-        const [trail] = await this.db.$queryRaw<
+        const [trail] = await db.$queryRaw<
             Array<{
                 id: number;
                 name: string;
@@ -268,8 +264,8 @@ export class TrailsService {
      * @returns The trails.
      */
     async getTrails(
-        search: string | undefined,
-        location: PointCoordinates | undefined,
+        search: string | undefined | null,
+        location: PointCoordinates | undefined | null,
         distance: number | undefined,
     ): Promise<Trail[] | null> {
         const whereClause = this.buildSearchWhereClause(
@@ -302,7 +298,7 @@ export class TrailsService {
                 ${whereClause}
                 ${orderByClause}
         `;
-        const trails = await this.db.$queryRaw<
+        const trails = await db.$queryRaw<
             Array<{
                 id: number;
                 name: string;
@@ -343,7 +339,7 @@ export class TrailsService {
      */
     async getTrailViewModel(
         id: number,
-        userId: number,
+        userId: number | undefined | null,
     ): Promise<TrailViewModel | null> {
         const query = Prisma.sql`
             SELECT 
@@ -360,13 +356,13 @@ export class TrailsService {
                 "Park"."name" AS "parkName",
                 ST_Y("Park"."location"::geometry) AS "parkLat",
                 ST_X("Park"."location"::geometry) AS "parkLng",
-                EXISTS (SELECT 1 FROM "Favorite" WHERE "Favorite"."trailId" = "Trail"."id" AND "Favorite"."userId" = ${userId}) AS "isFavorite"
+                ${userId ? Prisma.sql`EXISTS (SELECT 1 FROM "Favorite" WHERE "Favorite"."trailId" = "Trail"."id" AND "Favorite"."userId" = ${userId}) AS "isFavorite"` : Prisma.sql`NULL AS "isFavorite"`}
                 FROM "Trail" 
                 LEFT JOIN "Park" ON "Trail"."parkId" = "Park"."id"
-                LEFT JOIN "Favorite" ON "Favorite"."trailId" = "Trail"."id" AND "Favorite"."userId" = ${userId}
+                ${userId ? Prisma.sql`LEFT JOIN "Favorite" ON "Favorite"."trailId" = "Trail"."id" AND "Favorite"."userId" = ${userId}` : Prisma.empty}
                 WHERE "id" = ${id}
         `;
-        const [trail] = await this.db.$queryRaw<
+        const [trail] = await db.$queryRaw<
             Array<{
                 id: number;
                 name: string;
@@ -418,10 +414,10 @@ export class TrailsService {
      * @returns The trail view models.
      */
     async getTrailViewModels(
-        search: string | undefined,
-        location: PointCoordinates | undefined,
-        distance: number | undefined,
-        userId: number,
+        search: string | undefined | null,
+        location: PointCoordinates | undefined | null,
+        distance: number | undefined | null,
+        userId: number | undefined | null,
     ): Promise<TrailViewModel[] | null> {
         const whereClause = this.buildSearchWhereClause(
             search,
@@ -451,15 +447,15 @@ export class TrailsService {
                 "Park"."name" AS "parkName",
                 ST_Y("Park"."location"::geometry) AS "parkLat",
                 ST_X("Park"."location"::geometry) AS "parkLng",
-                EXISTS (SELECT 1 FROM "Favorite" WHERE "Favorite"."trailId" = "Trail"."id" AND "Favorite"."userId" = ${userId}) AS "isFavorite"
+                ${userId ? Prisma.sql`EXISTS (SELECT 1 FROM "Favorite" WHERE "Favorite"."trailId" = "Trail"."id" AND "Favorite"."userId" = ${userId}) AS "isFavorite"` : Prisma.sql`NULL AS "isFavorite"`}
                 ${distanceSelect}
                 FROM "Trail" 
                 LEFT JOIN "Park" ON "Trail"."parkId" = "Park"."id"
-                LEFT JOIN "Favorite" ON "Favorite"."trailId" = "Trail"."id" AND "Favorite"."userId" = ${userId}
+                ${userId ? Prisma.sql`LEFT JOIN "Favorite" ON "Favorite"."trailId" = "Trail"."id" AND "Favorite"."userId" = ${userId}` : Prisma.empty}
                 ${whereClause}
                 ${orderByClause}
         `;
-        const trails = await this.db.$queryRaw<
+        const trails = await db.$queryRaw<
             Array<{
                 id: number;
                 name: string;
@@ -531,7 +527,7 @@ export class TrailsService {
                 WHERE "Favorite"."userId" = ${userId}
                 ORDER BY "Trail".name ASC;
         `;
-        const trails = await this.db.$queryRaw<
+        const trails = await db.$queryRaw<
             Array<{
                 id: number;
                 name: string;
@@ -584,9 +580,9 @@ export class TrailsService {
      * @returns The search where clause.
      */
     private buildSearchWhereClause(
-        search: string | undefined,
-        location: PointCoordinates | undefined,
-        distance: number | undefined,
+        search: string | undefined | null,
+        location: PointCoordinates | undefined | null,
+        distance: number | undefined | null,
     ): Prisma.Sql {
         const conditions: Prisma.Sql[] = [];
 
@@ -621,3 +617,8 @@ export class TrailsService {
       ) AS "distanceMeters"`;
     }
 }
+
+/**
+ * The trails service instance.
+ */
+export const trailsService = new TrailsService();

@@ -1,24 +1,20 @@
-import { PrismaClient } from "@/generated/prisma/client";
 import {
     FavoriteTrail,
     FavoriteTrailSchema,
 } from "@/lib/validations/favorite_trail";
+import { db } from "../db";
 
 /**
  * FavoriteTrailsService for the favorite trail entity. This service is used to create, update, and get favorite trails from the database.
- * @param db - The database client.
  *
  * @example
- * const favoriteTrailsService = new FavoriteTrailsService(db);
  * const favoriteTrail = await favoriteTrailsService.createFavoriteTrail({
  *     trailId: 1,
  *     userId: 1,
- * });  
+ * });
  * console.log(favoriteTrail);
  */
 export class FavoriteTrailsService {
-    constructor(private readonly db: PrismaClient) {}
-
     /**
      * Create a new favorite trail.
      * @param favoriteTrail - The favorite trail to create.
@@ -27,7 +23,7 @@ export class FavoriteTrailsService {
     async createFavoriteTrail(
         favoriteTrail: FavoriteTrail,
     ): Promise<FavoriteTrail | null> {
-        const created = await this.db.favoriteTrail.create({
+        const created = await db.favoriteTrail.create({
             data: favoriteTrail,
         });
         if (!created) return null;
@@ -40,10 +36,15 @@ export class FavoriteTrailsService {
      * @returns The deleted favorite trail. If no favorite trail is found, returns null.
      */
     async deleteFavoriteTrail(id: number): Promise<number | null> {
-        const deleted = await this.db.favoriteTrail.delete({
+        const deleted = await db.favoriteTrail.delete({
             where: { id },
         });
         if (!deleted) return null;
         return id;
     }
 }
+
+/**
+ * The favorite trails service instance.
+ */
+export const favoriteTrailsService = new FavoriteTrailsService();

@@ -1,4 +1,4 @@
-import { PrismaClient } from "@/generated/prisma/client";
+import { db } from "../db";
 import { Region, RegionUpdate } from "@/lib/validations/region";
 import {
     RegionViewModel,
@@ -7,10 +7,7 @@ import {
 
 /**
  * RegionsService for the region entity. This service is used to create, update, and get regions from the database.
- * @param db - The database client.
- *
  * @example
- * const regionsService = new RegionsService(db);
  * const region = await regionsService.createRegion({
  *     name: "Region 1",
  *     description: "Description 1",
@@ -19,18 +16,12 @@ import {
  */
 export class RegionsService {
     /**
-     * Constructor for the RegionsService.
-     * @param db - The database client.
-     */
-    constructor(private readonly db: PrismaClient) {}
-
-    /**
      * Create a new region.
      * @param region - The region to create.
      * @returns The created region. If the region already exists, returns null.
      */
     async createRegion(region: Region): Promise<Region | null> {
-        return this.db.region.create({
+        return db.region.create({
             data: region,
         });
     }
@@ -45,7 +36,7 @@ export class RegionsService {
         id: number,
         region: RegionUpdate,
     ): Promise<Region | null> {
-        return this.db.region.update({
+        return db.region.update({
             where: { id },
             data: region,
         });
@@ -57,7 +48,7 @@ export class RegionsService {
      * @returns The deleted region. If no region is found, returns null.
      */
     async deleteRegion(id: number): Promise<number | null> {
-        const deleted = await this.db.region.delete({
+        const deleted = await db.region.delete({
             where: { id },
         });
         if (!deleted) return null;
@@ -70,7 +61,7 @@ export class RegionsService {
      * @returns The region. If no region is found, returns null.
      */
     async getRegion(id: number): Promise<Region | null> {
-        return this.db.region.findUnique({
+        return db.region.findUnique({
             where: { id },
         });
     }
@@ -81,7 +72,7 @@ export class RegionsService {
      * @returns The regions. If no regions are found, returns null.
      */
     async getRegions(search: string | undefined): Promise<Region[] | null> {
-        return this.db.region.findMany({
+        return db.region.findMany({
             where: {
                 name: search
                     ? {
@@ -99,7 +90,7 @@ export class RegionsService {
      * @returns The region view model. If no region is found, returns null.
      */
     async getRegionViewModel(id: number): Promise<RegionViewModel | null> {
-        const region = await this.db.region.findUnique({
+        const region = await db.region.findUnique({
             where: { id },
             select: {
                 id: true,
@@ -145,7 +136,7 @@ export class RegionsService {
     async getRegionsViewModel(
         search: string | undefined,
     ): Promise<RegionViewModel[] | null> {
-        const regions = await this.db.region.findMany({
+        const regions = await db.region.findMany({
             where: {
                 name: search
                     ? {
@@ -191,3 +182,8 @@ export class RegionsService {
         );
     }
 }
+
+/**
+ * The regions service instance.
+ */
+export const regionsService = new RegionsService();

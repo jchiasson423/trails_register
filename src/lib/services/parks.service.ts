@@ -1,4 +1,5 @@
-import { Prisma, PrismaClient } from "@/generated/prisma/client";
+import { Prisma } from "@/generated/prisma/client";
+import { db } from "../db";
 import { Park, ParkSchema, ParkUpdate } from "@/lib/validations/park";
 import { PointCoordinates, PointSchema } from "@/lib/validations/geo";
 import {
@@ -8,10 +9,7 @@ import {
 
 /**
  * ParksService for the park entity. This service is used to create, update, and get parks from the database.
- * @param db - The database client.
- *
  * @example
- * const parksService = new ParksService(db);
  * const park = await parksService.createPark({
  *     name: "Park 1",
  *     description: "Description 1",
@@ -22,18 +20,12 @@ import {
  */
 export class ParksService {
     /**
-     * Constructor for the ParksService.
-     * @param db - The database client.
-     */
-    constructor(private readonly db: PrismaClient) {}
-
-    /**
      * Create a new park.
      * @param park - The park to create.
      * @returns The created park. If the park already exists, returns null.
      */
     async createPark(park: Park): Promise<Park | null> {
-        const [created] = await this.db.$queryRaw<
+        const [created] = await db.$queryRaw<
             Array<{
                 id: number;
                 name: string;
@@ -118,7 +110,7 @@ export class ParksService {
                 ST_X(location::geometry) AS lng;
         `;
 
-        const [updated] = await this.db.$queryRaw<
+        const [updated] = await db.$queryRaw<
             Array<{
                 id: number;
                 name: string;
@@ -151,7 +143,7 @@ export class ParksService {
      * @returns The deleted park. If no park is found, returns null.
      */
     async deletePark(id: number): Promise<number | null> {
-        const deleted = await this.db.park.delete({
+        const deleted = await db.park.delete({
             where: { id },
         });
         if (!deleted) return null;
@@ -175,7 +167,7 @@ export class ParksService {
                 FROM "Park" 
                 WHERE "id" = ${id}
         `;
-        const [park] = await this.db.$queryRaw<
+        const [park] = await db.$queryRaw<
             Array<{
                 id: number;
                 name: string;
@@ -242,7 +234,7 @@ export class ParksService {
             ${orderByClause}
         `;
 
-        const parks = await this.db.$queryRaw<
+        const parks = await db.$queryRaw<
             Array<{
                 id: number;
                 name: string;
@@ -275,9 +267,9 @@ export class ParksService {
      */
     async getParkViewModel(
         id: number,
-        userId: number,
+        userId: number | undefined | null,
     ): Promise<ParkViewModel | null> {
-        const [park] = await this.db.$queryRaw<
+        const [park] = await db.$queryRaw<
             Array<{
                 id: number;
                 name: string;
@@ -296,11 +288,11 @@ export class ParksService {
             ST_X(location::geometry) AS lng,
             "Region"."name" AS "regionName",
             COUNT("Trail"."id") AS "trailCount",
-            EXISTS (SELECT 1 FROM "Favorite" WHERE "Favorite"."parkId" = "Park"."id" AND "Favorite"."userId" = ${userId}) AS "isFavorite"
+            ${userId ? Prisma.sql`EXISTS (SELECT 1 FROM "Favorite" WHERE "Favorite"."parkId" = "Park"."id" AND "Favorite"."userId" = ${userId}) AS "isFavorite"` : Prisma.sql`NULL AS "isFavorite"`}
             FROM "Park" 
             LEFT JOIN "Region" ON "Park"."regionId" = "Region"."id"
             LEFT JOIN "Trail" ON "Park"."id" = "Trail"."parkId"
-            LEFT JOIN "Favorite" ON "Favorite"."parkId" = "Park"."id" AND "Favorite"."userId" = ${userId}
+            ${userId ? Prisma.sql`LEFT JOIN "Favorite" ON "Favorite"."parkId" = "Park"."id" AND "Favorite"."userId" = ${userId}` : Prisma.empty}
             WHERE "Park"."id" = ${id}
             GROUP BY "Park"."id", "Region"."name"
             `;
@@ -332,7 +324,7 @@ export class ParksService {
         search: string | undefined,
         location: PointCoordinates | undefined,
         distance: number | undefined,
-        userId: number,
+        userId: number | undefined | null,
     ): Promise<ParkViewModel[]> {
         const whereClause = this.buildSearchWhereClause(
             search,
@@ -360,18 +352,18 @@ export class ParksService {
                 ST_Y("Park".location::geometry) AS lat,
                 ST_X("Park".location::geometry) AS lng,
                 "Region"."name" AS "regionName",
-                EXISTS (SELECT 1 FROM "Favorite" WHERE "Favorite"."parkId" = "Park"."id" AND "Favorite"."userId" = ${userId}) AS "isFavorite"
+                ${userId ? Prisma.sql`EXISTS (SELECT 1 FROM "Favorite" WHERE "Favorite"."parkId" = "Park"."id" AND "Favorite"."userId" = ${userId}) AS "isFavorite"` : Prisma.sql`NULL AS "isFavorite"`}
                 ${distanceSelect}
             FROM "Park"
             LEFT JOIN "Region" ON "Park"."regionId" = "Region"."id"
             LEFT JOIN "Trail" ON "Park"."id" = "Trail"."parkId"
-            LEFT JOIN "Favorite" ON "Favorite"."parkId" = "Park"."id" AND "Favorite"."userId" = ${userId}
+            ${userId ? Prisma.sql`LEFT JOIN "Favorite" ON "Favorite"."parkId" = "Park"."id" AND "Favorite"."userId" = ${userId}` : Prisma.empty}
             ${whereClause}
             GROUP BY "Park".id, "Region".name
             ${orderByClause};
         `;
 
-        const parks = await this.db.$queryRaw<
+        const parks = await db.$queryRaw<
             Array<{
                 id: number;
                 name: string;
@@ -425,7 +417,7 @@ export class ParksService {
             GROUP BY "Park".id, "Region".name
             ORDER BY "Park".name ASC;
         `;
-        const parks = await this.db.$queryRaw<
+        const parks = await db.$queryRaw<
             Array<{
                 id: number;
                 name: string;
@@ -499,3 +491,8 @@ export class ParksService {
       ) AS "distanceMeters"`;
     }
 }
+
+/**
+ * The parks service instance.
+ */
+export const parksService = new ParksService();
