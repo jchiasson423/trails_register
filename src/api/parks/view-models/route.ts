@@ -1,14 +1,15 @@
 import { successResponse } from "@/lib/api_response";
 import { authenticateAndSyncUser } from "@/lib/auth.middleware";
-import { trailsService } from "@/lib/services/trails.service";
+import { parksService } from "@/lib/services/parks.service";
 import { PointCoordinatesSchema } from "@/lib/validations/geo";
 import { User } from "@/lib/validations/user";
 
 /**
- * /trails/view-models GET
- * Get trail view models.
+ * /parks/view-models GET
+ * Get park view models.
  * @param request - The request.
- * @returns The trail view models.
+ * @param context - The context.
+ * @returns The park view model.
  */
 export async function GET(request: Request) {
     let user: User | null = null;
@@ -28,12 +29,12 @@ export async function GET(request: Request) {
     const location =
         lat && lng ? PointCoordinatesSchema.parse({ lat, lng }) : undefined;
 
-    const trailViewModels = await trailsService.getTrailViewModels(
-        search,
+    const parkViewModels = await parksService.getParksViewModels(
+        search ?? undefined,
         location,
         distance,
         user?.id ?? undefined,
     );
 
-    return successResponse(trailViewModels);
+    return successResponse(parkViewModels);
 }
