@@ -133,7 +133,7 @@ export class RegionsService {
      * @param search - The search query.
      * @returns The regions view models. If no regions are found, returns null.
      */
-    async getRegionsViewModel(
+    async getRegionsViewModels(
         search: string | undefined,
     ): Promise<RegionViewModel[] | null> {
         const regions = await db.region.findMany({

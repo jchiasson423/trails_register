@@ -1,8 +1,8 @@
 import { errorResponse, successResponse } from "@/lib/api_response";
 import { authenticateAndSyncUser } from "@/lib/auth.middleware";
 import { roleMiddleware } from "@/lib/role.middleware";
-import { parksService } from "@/lib/services/parks.service";
-import { ParkUpdateSchema } from "@/lib/validations/park";
+import { regionsService } from "@/lib/services/regions.service";
+import { RegionUpdateSchema } from "@/lib/validations/region";
 import { User } from "@/lib/validations/user";
 
 type Context = {
@@ -10,34 +10,34 @@ type Context = {
 };
 
 /**
- * /parks/[id] GET
- * Get a park by its ID.
+ * /regions/[id] GET
+ * Get a region by its ID.
  * @param request - The request.
  * @param context - The context.
- * @returns The park.
+ * @returns The region.
  */
 export async function GET(request: Request, context: Context) {
     const id = Number((await context.params).id);
 
     if (!id || isNaN(id)) {
-        return errorResponse(Error("Invalid park ID"), 400);
+        return errorResponse(Error("Invalid region ID"), 400);
     }
 
-    const park = await parksService.getPark(id);
+    const region = await regionsService.getRegion(id);
 
-    if (!park) {
-        return errorResponse(Error("Park not found"), 404);
+    if (!region) {
+        return errorResponse(Error("Region not found"), 404);
     }
 
-    return successResponse(park);
+    return successResponse(region);
 }
 
 /**
- * /parks/[id] PUT
- * Update a park by its ID.
+ * /regions/[id] PUT
+ * Update a region by its ID.
  * @param request - The request.
  * @param context - The context.
- * @returns The updated park.
+ * @returns The updated region.
  */
 export async function PUT(request: Request, context: Context) {
     let user: User | null = null;
@@ -61,26 +61,26 @@ export async function PUT(request: Request, context: Context) {
     const id = Number((await context.params).id);
 
     if (!id || isNaN(id)) {
-        return errorResponse(Error("Invalid park ID"), 400);
+        return errorResponse(Error("Invalid region ID"), 400);
     }
 
-    const parkUpdate = ParkUpdateSchema.parse(await request.json());
+    const regionUpdate = RegionUpdateSchema.parse(await request.json());
 
-    const park = await parksService.updatePark(id, parkUpdate);
+    const region = await regionsService.updateRegion(id, regionUpdate);
 
-    if (!park) {
-        return errorResponse(Error("Failed to update park"), 500);
+    if (!region) {
+        return errorResponse(Error("Failed to update region"), 500);
     }
 
-    return successResponse(park);
+    return successResponse(region);
 }
 
 /**
- * /parks/[id] DELETE
- * Delete a park by its ID.
+ * /regions/[id] DELETE
+ * Delete a region by its ID.
  * @param request - The request.
  * @param context - The context.
- * @returns The deleted park.
+ * @returns The deleted region.
  */
 export async function DELETE(request: Request, context: Context) {
     let user: User | null = null;
@@ -104,14 +104,14 @@ export async function DELETE(request: Request, context: Context) {
     const id = Number((await context.params).id);
 
     if (!id || isNaN(id)) {
-        return errorResponse(Error("Invalid park ID"), 400);
+        return errorResponse(Error("Invalid region ID"), 400);
     }
 
-    const deletedPark = await parksService.deletePark(id);
+    const deletedRegion = await regionsService.deleteRegion(id);
 
-    if (!deletedPark) {
-        return errorResponse(Error("Failed to delete park"), 500);
+    if (!deletedRegion) {
+        return errorResponse(Error("Failed to delete region"), 500);
     }
 
-    return successResponse(deletedPark);
+    return successResponse(deletedRegion);
 }

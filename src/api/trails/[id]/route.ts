@@ -6,7 +6,7 @@ import { TrailUpdateSchema } from "@/lib/validations/trail";
 import { User } from "@/lib/validations/user";
 
 type Context = {
-    params: Promise<{ id: string }>; // Utilise Promise<{ id: string }> si tu es sur Next.js 15+
+    params: Promise<{ id: string }>;
 };
 
 /**
