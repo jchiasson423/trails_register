@@ -1,11 +1,37 @@
 import { Difficulty, Prisma } from "@/generated/prisma/client";
 import { db } from "../db";
-import { PointCoordinates, PointSchema } from "@/lib/validations/geo";
+import { PointCoordinates } from "@/lib/validations/geo";
 import { Trail, TrailSchema, TrailUpdate } from "@/lib/validations/trail";
 import {
     TrailViewModel,
     TrailViewModelSchema,
 } from "@/lib/view_models/trail_view_model";
+import {
+    distanceSelectSql,
+    makePointSql,
+    pointFromLatLng,
+    withinDistanceSql,
+} from "./geo_sql";
+
+type TrailRow = {
+    id: number;
+    name: string;
+    description: string;
+    parkId: number;
+    difficulty: Difficulty;
+    length: number;
+    elevationChange: number;
+    duration: number;
+    lat: number | null;
+    lng: number | null;
+};
+
+type TrailViewRow = TrailRow & {
+    parkName: string | null;
+    parkLat: number | null;
+    parkLng: number | null;
+    isFavorite: boolean;
+};
 
 /**
  * TrailsService for the trail entity. This service is used to create, update, and get trails from the database.
@@ -26,70 +52,51 @@ export class TrailsService {
     /**
      * Create a new trail.
      * @param trail - The trail to create.
-     * @returns The created trail. If the trail already exists, returns null.
+     * @returns The created trail.
      */
     async createTrail(trail: Trail): Promise<Trail | null> {
-        const [created] = await db.$queryRaw<
-            Array<{
-                id: number;
-                name: string;
-                description: string;
-                parkId: number;
-                difficulty: Difficulty;
-                length: number;
-                elevationChange: number;
-                duration: number;
-                lat: number;
-                lng: number;
-            }>
-        >`
+        const trailheadSql = trail.trailhead?.coordinates
+            ? makePointSql(
+                  trail.trailhead.coordinates.longitude,
+                  trail.trailhead.coordinates.latitude,
+              )
+            : Prisma.sql`NULL`;
+
+        const [created] = await db.$queryRaw<TrailRow[]>`
             INSERT INTO "Trail" (
-                "name", 
-                "description", 
-                "parkId", 
-                "difficulty", 
-                "length", 
-                "elevationChange", 
+                "name",
+                "description",
+                "parkId",
+                "difficulty",
+                "length",
+                "elevationChange",
                 "duration",
-                "trailhead",
-                )
+                "trailhead"
+            )
             VALUES (
-                ${trail.name}, 
-                ${trail.description}, 
-                ${trail.parkId}, 
-                ${trail.difficulty}, 
-                ${trail.length}, 
-                ${trail.elevationChange}, 
+                ${trail.name},
+                ${trail.description},
+                ${trail.parkId},
+                ${trail.difficulty}::"Difficulty",
+                ${trail.length},
+                ${trail.elevationChange},
                 ${trail.duration},
-                ST_SetSRID(ST_MakePoint(${trail.trailhead?.coordinates.longitude}, ${trail.trailhead?.coordinates.latitude}), 4326)
-            RETURNING 
+                ${trailheadSql}
+            )
+            RETURNING
                 id,
                 name,
                 description,
-                parkId,
+                "parkId",
                 difficulty,
                 length,
-                elevationChange,
+                "elevationChange",
                 duration,
                 ST_Y(trailhead::geometry) AS lat,
-                ST_X(trailhead::geometry) AS lng;
+                ST_X(trailhead::geometry) AS lng
         `;
-        return TrailSchema.parse({
-            id: created.id,
-            name: created.name,
-            description: created.description,
-            parkId: created.parkId,
-            difficulty: created.difficulty,
-            length: created.length,
-            elevationChange: created.elevationChange,
-            duration: created.duration,
-            trailhead: PointSchema.parse({
-                coordinates: {
-                    latitude: created.lat,
-                    longitude: created.lng,
-                },
-            }),
-        });
+        if (!created) return null;
+        return this.mapTrail(created);
     }
 
     /**
@@ -111,7 +118,9 @@ export class TrailsService {
             updates.push(Prisma.sql`"parkId" = ${trail.parkId}`);
         }
         if (trail.difficulty !== undefined) {
-            updates.push(Prisma.sql`"difficulty" = ${trail.difficulty}`);
+            updates.push(
+                Prisma.sql`"difficulty" = ${trail.difficulty}::"Difficulty"`,
+            );
         }
         if (trail.length !== undefined) {
             updates.push(Prisma.sql`"length" = ${trail.length}`);
@@ -124,75 +133,46 @@ export class TrailsService {
         if (trail.duration !== undefined) {
             updates.push(Prisma.sql`"duration" = ${trail.duration}`);
         }
-        if (trail.trailhead?.coordinates) {
-            const { longitude, latitude } = trail.trailhead.coordinates;
-            updates.push(
-                Prisma.sql`"trailhead" = ST_SetSRID(ST_MakePoint(${longitude}, ${latitude}), 4326)`,
-            );
-        } else {
-            updates.push(Prisma.sql`"trailhead" = NULL`);
+        if (trail.trailhead !== undefined) {
+            if (trail.trailhead?.coordinates) {
+                const { longitude, latitude } = trail.trailhead.coordinates;
+                updates.push(
+                    Prisma.sql`"trailhead" = ${makePointSql(longitude, latitude)}`,
+                );
+            } else {
+                updates.push(Prisma.sql`"trailhead" = NULL`);
+            }
         }
 
         if (updates.length === 0) {
             return this.getTrail(id);
         }
 
-        const query = Prisma.sql`
+        const [updated] = await db.$queryRaw<TrailRow[]>`
             UPDATE "Trail"
             SET ${Prisma.join(updates, ", ")}
             WHERE "id" = ${id}
-            RETURNING 
+            RETURNING
                 id,
                 name,
                 description,
-                parkId,
+                "parkId",
                 difficulty,
                 length,
-                elevationChange,
+                "elevationChange",
                 duration,
                 ST_Y(trailhead::geometry) AS lat,
-                ST_X(trailhead::geometry) AS lng;
+                ST_X(trailhead::geometry) AS lng
         `;
 
-        const [updated] = await db.$queryRaw<
-            Array<{
-                id: number;
-                name: string;
-                description: string;
-                parkId: number;
-                difficulty: Difficulty;
-                length: number;
-                elevationChange: number;
-                duration: number;
-                lat: number;
-                lng: number;
-            }>
-        >(query);
-
         if (!updated) return null;
-
-        return TrailSchema.parse({
-            id: updated.id,
-            name: updated.name,
-            description: updated.description,
-            parkId: updated.parkId,
-            difficulty: updated.difficulty,
-            length: updated.length,
-            elevationChange: updated.elevationChange,
-            duration: updated.duration,
-            trailhead: PointSchema.parse({
-                coordinates: {
-                    latitude: updated.lat,
-                    longitude: updated.lng,
-                },
-            }),
-        });
+        return this.mapTrail(updated);
     }
 
     /**
      * Delete a trail.
      * @param id - The id of the trail to delete.
-     * @returns The deleted trail. If no trail is found, returns null.
+     * @returns The deleted trail id. If no trail is found, returns null.
      */
     async deleteTrail(id: number): Promise<number | null> {
         const deleted = await db.trail.delete({
@@ -208,52 +188,23 @@ export class TrailsService {
      * @returns The trail. If no trail is found, returns null.
      */
     async getTrail(id: number): Promise<Trail | null> {
-        const query = Prisma.sql`
-            SELECT 
-                id, 
-                name, 
-                description, 
-                parkId, 
-                difficulty, 
-                length, 
-                elevationChange, 
-                duration, 
-                ST_Y(trailhead::geometry) AS lat, 
-                ST_X(trailhead::geometry) AS lng 
-                FROM "Trail" 
-                WHERE "id" = ${id}
+        const [trail] = await db.$queryRaw<TrailRow[]>`
+            SELECT
+                id,
+                name,
+                description,
+                "parkId",
+                difficulty,
+                length,
+                "elevationChange",
+                duration,
+                ST_Y(trailhead::geometry) AS lat,
+                ST_X(trailhead::geometry) AS lng
+            FROM "Trail"
+            WHERE "id" = ${id}
         `;
-        const [trail] = await db.$queryRaw<
-            Array<{
-                id: number;
-                name: string;
-                description: string;
-                parkId: number;
-                difficulty: Difficulty;
-                length: number;
-                elevationChange: number;
-                duration: number;
-                lat: number;
-                lng: number;
-            }>
-        >(query);
         if (!trail) return null;
-        return TrailSchema.parse({
-            id: trail.id,
-            name: trail.name,
-            description: trail.description,
-            parkId: trail.parkId,
-            difficulty: trail.difficulty,
-            length: trail.length,
-            elevationChange: trail.elevationChange,
-            duration: trail.duration,
-            trailhead: PointSchema.parse({
-                coordinates: {
-                    latitude: trail.lat,
-                    longitude: trail.lng,
-                },
-            }),
-        });
+        return this.mapTrail(trail);
     }
 
     /**
@@ -267,7 +218,7 @@ export class TrailsService {
         search: string | undefined | null,
         location: PointCoordinates | undefined | null,
         distance: number | undefined,
-    ): Promise<Trail[] | null> {
+    ): Promise<Trail[]> {
         const whereClause = this.buildSearchWhereClause(
             search,
             location,
@@ -275,135 +226,66 @@ export class TrailsService {
         );
         const distanceSelect =
             location && distance
-                ? this.buildDistanceSelect(location)
+                ? distanceSelectSql(`"Trail"."trailhead"`, location)
                 : Prisma.empty;
         const orderByClause =
             location && distance
                 ? Prisma.sql`ORDER BY "distanceMeters" ASC`
                 : Prisma.sql`ORDER BY "name" ASC`;
-        const query = Prisma.sql`
-            SELECT 
-                id, 
-                name, 
-                description, 
-                parkId, 
-                difficulty, 
-                length, 
-                elevationChange, 
-                duration, 
-                ST_Y(trailhead::geometry) AS lat, 
-                ST_X(trailhead::geometry) AS lng 
+
+        const trails = await db.$queryRaw<TrailRow[]>`
+            SELECT
+                id,
+                name,
+                description,
+                "parkId",
+                difficulty,
+                length,
+                "elevationChange",
+                duration,
+                ST_Y(trailhead::geometry) AS lat,
+                ST_X(trailhead::geometry) AS lng
                 ${distanceSelect}
-                FROM "Trail" 
-                ${whereClause}
-                ${orderByClause}
+            FROM "Trail"
+            ${whereClause}
+            ${orderByClause}
         `;
-        const trails = await db.$queryRaw<
-            Array<{
-                id: number;
-                name: string;
-                description: string;
-                parkId: number;
-                difficulty: Difficulty;
-                length: number;
-                elevationChange: number;
-                duration: number;
-                lat: number;
-                lng: number;
-            }>
-        >(query);
-        return trails.map((trail) =>
-            TrailSchema.parse({
-                id: trail.id,
-                name: trail.name,
-                description: trail.description,
-                parkId: trail.parkId,
-                difficulty: trail.difficulty,
-                length: trail.length,
-                elevationChange: trail.elevationChange,
-                duration: trail.duration,
-                trailhead: PointSchema.parse({
-                    coordinates: {
-                        latitude: trail.lat,
-                        longitude: trail.lng,
-                    },
-                }),
-            }),
-        );
+
+        return trails.map((trail) => this.mapTrail(trail));
     }
 
     /**
      * Get a trail view model by id.
      * @param id - The id of the trail to get.
+     * @param userId - Optional user for favorite flag.
      * @returns The trail view model. If no trail is found, returns null.
      */
     async getTrailViewModel(
         id: number,
         userId: number | undefined | null,
     ): Promise<TrailViewModel | null> {
-        const query = Prisma.sql`
-            SELECT 
-                id, 
-                name, 
-                description, 
-                parkId, 
-                difficulty, 
-                length, 
-                elevationChange, 
-                duration, 
-                ST_Y(trailhead::geometry) AS lat, 
-                ST_X(trailhead::geometry) AS lng,
+        const [trail] = await db.$queryRaw<TrailViewRow[]>`
+            SELECT
+                "Trail".id,
+                "Trail".name,
+                "Trail".description,
+                "Trail"."parkId",
+                "Trail".difficulty,
+                "Trail".length,
+                "Trail"."elevationChange",
+                "Trail".duration,
+                ST_Y("Trail".trailhead::geometry) AS lat,
+                ST_X("Trail".trailhead::geometry) AS lng,
                 "Park"."name" AS "parkName",
                 ST_Y("Park"."location"::geometry) AS "parkLat",
                 ST_X("Park"."location"::geometry) AS "parkLng",
-                ${userId ? Prisma.sql`EXISTS (SELECT 1 FROM "Favorite" WHERE "Favorite"."trailId" = "Trail"."id" AND "Favorite"."userId" = ${userId}) AS "isFavorite"` : Prisma.sql`NULL AS "isFavorite"`}
-                FROM "Trail" 
-                LEFT JOIN "Park" ON "Trail"."parkId" = "Park"."id"
-                ${userId ? Prisma.sql`LEFT JOIN "Favorite" ON "Favorite"."trailId" = "Trail"."id" AND "Favorite"."userId" = ${userId}` : Prisma.empty}
-                WHERE "id" = ${id}
+                ${this.favoriteSelect(userId)}
+            FROM "Trail"
+            LEFT JOIN "Park" ON "Trail"."parkId" = "Park"."id"
+            WHERE "Trail"."id" = ${id}
         `;
-        const [trail] = await db.$queryRaw<
-            Array<{
-                id: number;
-                name: string;
-                description: string;
-                parkId: number;
-                difficulty: Difficulty;
-                length: number;
-                elevationChange: number;
-                duration: number;
-                lat: number;
-                lng: number;
-                parkName: string;
-                parkLat: number;
-                parkLng: number;
-                isFavorite: boolean;
-            }>
-        >(query);
         if (!trail) return null;
-        return TrailViewModelSchema.parse({
-            id: trail.id,
-            name: trail.name,
-            description: trail.description,
-            parkName: trail.parkName,
-            difficulty: trail.difficulty,
-            length: trail.length,
-            elevationChange: trail.elevationChange,
-            duration: trail.duration,
-            trailhead: PointSchema.parse({
-                coordinates: {
-                    latitude: trail.lat,
-                    longitude: trail.lng,
-                },
-            }),
-            parkLocation: PointSchema.parse({
-                coordinates: {
-                    latitude: trail.parkLat,
-                    longitude: trail.parkLng,
-                },
-            }),
-            isFavorite: trail.isFavorite,
-        });
+        return this.mapTrailViewModel(trail);
     }
 
     /**
@@ -411,6 +293,7 @@ export class TrailsService {
      * @param search - The search query.
      * @param location - The location to get the trail view models for.
      * @param distance - The distance to get the trail view models for.
+     * @param userId - Optional user for favorite flag.
      * @returns The trail view models.
      */
     async getTrailViewModels(
@@ -418,7 +301,7 @@ export class TrailsService {
         location: PointCoordinates | undefined | null,
         distance: number | undefined | null,
         userId: number | undefined | null,
-    ): Promise<TrailViewModel[] | null> {
+    ): Promise<TrailViewModel[]> {
         const whereClause = this.buildSearchWhereClause(
             search,
             location,
@@ -426,158 +309,115 @@ export class TrailsService {
         );
         const distanceSelect =
             location && distance
-                ? this.buildDistanceSelect(location)
+                ? distanceSelectSql(`"Trail"."trailhead"`, location)
                 : Prisma.empty;
         const orderByClause =
             location && distance
                 ? Prisma.sql`ORDER BY "distanceMeters" ASC`
-                : Prisma.sql`ORDER BY "name" ASC`;
-        const query = Prisma.sql`
-            SELECT 
-                id, 
-                name, 
-                description, 
-                parkId, 
-                difficulty, 
-                length, 
-                elevationChange, 
-                duration, 
-                ST_Y(trailhead::geometry) AS lat, 
-                ST_X(trailhead::geometry) AS lng,
+                : Prisma.sql`ORDER BY "Trail"."name" ASC`;
+
+        const trails = await db.$queryRaw<TrailViewRow[]>`
+            SELECT
+                "Trail".id,
+                "Trail".name,
+                "Trail".description,
+                "Trail"."parkId",
+                "Trail".difficulty,
+                "Trail".length,
+                "Trail"."elevationChange",
+                "Trail".duration,
+                ST_Y("Trail".trailhead::geometry) AS lat,
+                ST_X("Trail".trailhead::geometry) AS lng,
                 "Park"."name" AS "parkName",
                 ST_Y("Park"."location"::geometry) AS "parkLat",
                 ST_X("Park"."location"::geometry) AS "parkLng",
-                ${userId ? Prisma.sql`EXISTS (SELECT 1 FROM "Favorite" WHERE "Favorite"."trailId" = "Trail"."id" AND "Favorite"."userId" = ${userId}) AS "isFavorite"` : Prisma.sql`NULL AS "isFavorite"`}
+                ${this.favoriteSelect(userId)}
                 ${distanceSelect}
-                FROM "Trail" 
-                LEFT JOIN "Park" ON "Trail"."parkId" = "Park"."id"
-                ${userId ? Prisma.sql`LEFT JOIN "Favorite" ON "Favorite"."trailId" = "Trail"."id" AND "Favorite"."userId" = ${userId}` : Prisma.empty}
-                ${whereClause}
-                ${orderByClause}
+            FROM "Trail"
+            LEFT JOIN "Park" ON "Trail"."parkId" = "Park"."id"
+            ${whereClause}
+            ${orderByClause}
         `;
-        const trails = await db.$queryRaw<
-            Array<{
-                id: number;
-                name: string;
-                description: string;
-                parkId: number;
-                difficulty: Difficulty;
-                length: number;
-                elevationChange: number;
-                duration: number;
-                lat: number;
-                lng: number;
-                parkName: string;
-                parkLat: number;
-                parkLng: number;
-                isFavorite: boolean;
-            }>
-        >(query);
-        return trails.map((trail) =>
-            TrailViewModelSchema.parse({
-                id: trail.id,
-                name: trail.name,
-                description: trail.description,
-                parkName: trail.parkName,
-                difficulty: trail.difficulty,
-                length: trail.length,
-                elevationChange: trail.elevationChange,
-                duration: trail.duration,
-                trailhead: PointSchema.parse({
-                    coordinates: {
-                        latitude: trail.lat,
-                        longitude: trail.lng,
-                    },
-                }),
-                parkLocation: PointSchema.parse({
-                    coordinates: {
-                        latitude: trail.parkLat,
-                        longitude: trail.parkLng,
-                    },
-                }),
-                isFavorite: trail.isFavorite,
-            }),
-        );
+
+        return trails.map((trail) => this.mapTrailViewModel(trail));
     }
 
     /**
-     * Get all favorite trails.
+     * Get all favorite trails for a user.
      * @param userId - The id of the user to get the favorite trails for.
-     * @returns The favorite trails. If no favorite trails are found, returns null.
+     * @returns The favorite trails.
      */
     async getFavoriteTrails(userId: number): Promise<TrailViewModel[]> {
-        const query = Prisma.sql`
-            SELECT 
-                "Trail".id, 
-                "Trail".name, 
-                "Trail".description, 
-                "Trail".parkId, 
-                "Trail".difficulty, 
-                "Trail".length, 
-                "Trail".elevationChange, 
-                "Trail".duration, 
-                ST_Y("Trail".trailhead::geometry) AS "lat",
-                ST_X("Trail".trailhead::geometry) AS "lng",
+        const trails = await db.$queryRaw<TrailViewRow[]>`
+            SELECT
+                "Trail".id,
+                "Trail".name,
+                "Trail".description,
+                "Trail"."parkId",
+                "Trail".difficulty,
+                "Trail".length,
+                "Trail"."elevationChange",
+                "Trail".duration,
+                ST_Y("Trail".trailhead::geometry) AS lat,
+                ST_X("Trail".trailhead::geometry) AS lng,
                 "Park"."name" AS "parkName",
                 ST_Y("Park"."location"::geometry) AS "parkLat",
                 ST_X("Park"."location"::geometry) AS "parkLng",
-                FROM "Trail" 
-                LEFT JOIN "Park" ON "Trail"."parkId" = "Park"."id"
-                LEFT JOIN "Favorite" ON "Favorite"."trailId" = "Trail"."id" AND "Favorite"."userId" = ${userId}
-                WHERE "Favorite"."userId" = ${userId}
-                ORDER BY "Trail".name ASC;
+                true AS "isFavorite"
+            FROM "Trail"
+            INNER JOIN "FavoriteTrail" ON "FavoriteTrail"."trailId" = "Trail"."id"
+            LEFT JOIN "Park" ON "Trail"."parkId" = "Park"."id"
+            WHERE "FavoriteTrail"."userId" = ${userId}
+            ORDER BY "Trail".name ASC
         `;
-        const trails = await db.$queryRaw<
-            Array<{
-                id: number;
-                name: string;
-                description: string;
-                parkId: number;
-                difficulty: Difficulty;
-                length: number;
-                elevationChange: number;
-                duration: number;
-                lat: number;
-                lng: number;
-                parkName: string;
-                parkLat: number;
-                parkLng: number;
-                isFavorite: boolean;
-            }>
-        >(query);
-        return trails.map((trail) =>
-            TrailViewModelSchema.parse({
-                id: trail.id,
-                name: trail.name,
-                description: trail.description,
-                parkName: trail.parkName,
-                difficulty: trail.difficulty,
-                length: trail.length,
-                elevationChange: trail.elevationChange,
-                duration: trail.duration,
-                trailhead: PointSchema.parse({
-                    coordinates: {
-                        latitude: trail.lat,
-                        longitude: trail.lng,
-                    },
-                }),
-                parkLocation: PointSchema.parse({
-                    coordinates: {
-                        latitude: trail.parkLat,
-                        longitude: trail.parkLng,
-                    },
-                }),
-                isFavorite: true,
-            }),
-        );
+
+        return trails.map((trail) => this.mapTrailViewModel(trail));
+    }
+
+    private favoriteSelect(userId: number | undefined | null): Prisma.Sql {
+        if (!userId) {
+            return Prisma.sql`false AS "isFavorite"`;
+        }
+        return Prisma.sql`
+            EXISTS (
+                SELECT 1 FROM "FavoriteTrail" ft
+                WHERE ft."trailId" = "Trail"."id" AND ft."userId" = ${userId}
+            ) AS "isFavorite"
+        `;
+    }
+
+    private mapTrail(row: TrailRow): Trail {
+        return TrailSchema.parse({
+            id: row.id,
+            name: row.name,
+            description: row.description,
+            parkId: row.parkId,
+            difficulty: row.difficulty,
+            length: row.length,
+            elevationChange: row.elevationChange,
+            duration: row.duration,
+            trailhead: pointFromLatLng(row.lat, row.lng),
+        });
+    }
+
+    private mapTrailViewModel(row: TrailViewRow): TrailViewModel {
+        return TrailViewModelSchema.parse({
+            id: row.id,
+            name: row.name,
+            description: row.description,
+            parkName: row.parkName ?? undefined,
+            difficulty: row.difficulty,
+            length: row.length,
+            elevationChange: row.elevationChange,
+            duration: row.duration,
+            trailhead: pointFromLatLng(row.lat, row.lng),
+            parkLocation: pointFromLatLng(row.parkLat, row.parkLng),
+            isFavorite: Boolean(row.isFavorite),
+        });
     }
 
     /**
      * Build the search where clause.
-     * @param search - The search query.
-     * @param location - The location to build the search where clause for. If location and distance are provided, the trails will be filtered by distance.
-     * @param distance - The distance to build the search where clause for. If location and distance are provided, the trails will be filtered by distance.
-     * @returns The search where clause.
      */
     private buildSearchWhereClause(
         search: string | undefined | null,
@@ -592,29 +432,13 @@ export class TrailsService {
 
         if (location && distance) {
             conditions.push(
-                Prisma.sql`ST_DWithin(
-                    trailhead::geography,
-                    ST_SetSRID(ST_MakePoint(${location.longitude}, ${location.latitude}), 4326)::geography,
-                    ${distance}
-                )`,
+                withinDistanceSql(`"Trail"."trailhead"`, location, distance),
             );
         }
 
         return conditions.length > 0
             ? Prisma.sql`WHERE ${Prisma.join(conditions, " AND ")}`
             : Prisma.empty;
-    }
-
-    /**
-     * Build the distance select clause.
-     * @param location - The location to build the distance select clause for.
-     * @returns The distance select clause.
-     */
-    private buildDistanceSelect(location: PointCoordinates): Prisma.Sql {
-        return Prisma.sql`, ST_Distance(
-        trailhead::geography,
-        ST_SetSRID(ST_MakePoint(${location.longitude}, ${location.latitude}), 4326)::geography
-      ) AS "distanceMeters"`;
     }
 }
 

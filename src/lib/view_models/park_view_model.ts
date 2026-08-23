@@ -10,6 +10,7 @@ import { PointSchema } from "../validations/geo";
  * @param location - The location of the park.
  * @param trailCount - The number of trails in the park.
  * @param isFavorite - Whether the park is a favorite of the current user.
+ * @param hasFavoriteTrail - Whether the park has a favorite trail of the current user.
  */
 export const ParkViewModelSchema = z.object({
     id: z.number(),
@@ -19,6 +20,7 @@ export const ParkViewModelSchema = z.object({
     location: PointSchema,
     trailCount: z.number(),
     isFavorite: z.boolean(),
+    hasFavoriteTrail: z.boolean(),
 });
 
 /**
@@ -30,5 +32,6 @@ export const ParkViewModelSchema = z.object({
  * @param location - The location of the park.
  * @param trailCount - The number of trails in the park.
  * @param isFavorite - Whether the park is a favorite of the current user.
+ * @param hasFavoriteTrail - Whether the park has a favorite trail of the current user.
  */
 export type ParkViewModel = z.infer<typeof ParkViewModelSchema>;

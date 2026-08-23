@@ -1,9 +1,18 @@
+import { Prisma } from "@/generated/prisma/client";
 import { db } from "../db";
 import { Region, RegionUpdate } from "@/lib/validations/region";
 import {
     RegionViewModel,
     RegionViewModelSchema,
 } from "@/lib/view_models/region_view_model";
+
+type RegionViewRow = {
+    id: number;
+    name: string;
+    description: string;
+    parkCount: number;
+    trailCount: number;
+};
 
 /**
  * RegionsService for the region entity. This service is used to create, update, and get regions from the database.
@@ -18,7 +27,7 @@ export class RegionsService {
     /**
      * Create a new region.
      * @param region - The region to create.
-     * @returns The created region. If the region already exists, returns null.
+     * @returns The created region.
      */
     async createRegion(region: Region): Promise<Region | null> {
         return db.region.create({
@@ -30,7 +39,7 @@ export class RegionsService {
      * Update a region.
      * @param id - The id of the region to update.
      * @param region - The region to update.
-     * @returns The updated region. If no region is found, returns null.
+     * @returns The updated region.
      */
     async updateRegion(
         id: number,
@@ -45,7 +54,7 @@ export class RegionsService {
     /**
      * Delete a region.
      * @param id - The id of the region to delete.
-     * @returns The deleted region. If no region is found, returns null.
+     * @returns The deleted region id. If no region is found, returns null.
      */
     async deleteRegion(id: number): Promise<number | null> {
         const deleted = await db.region.delete({
@@ -69,9 +78,9 @@ export class RegionsService {
     /**
      * Get all regions.
      * @param search - The search query.
-     * @returns The regions. If no regions are found, returns null.
+     * @returns The regions.
      */
-    async getRegions(search: string | undefined): Promise<Region[] | null> {
+    async getRegions(search: string | undefined): Promise<Region[]> {
         return db.region.findMany({
             where: {
                 name: search
@@ -81,105 +90,71 @@ export class RegionsService {
                       }
                     : undefined,
             },
+            orderBy: { name: "asc" },
         });
     }
 
     /**
-     * Get a region view model by id.
+     * Get a region view model by id (park/trail counts via a single aggregate query).
      * @param id - The id of the region to get.
      * @returns The region view model. If no region is found, returns null.
      */
     async getRegionViewModel(id: number): Promise<RegionViewModel | null> {
-        const region = await db.region.findUnique({
-            where: { id },
-            select: {
-                id: true,
-                name: true,
-                description: true,
-                _count: {
-                    select: {
-                        parks: true,
-                    },
-                },
-                parks: {
-                    select: {
-                        id: true,
-                        name: true,
-                        description: true,
-                        _count: {
-                            select: {
-                                trails: true,
-                            },
-                        },
-                    },
-                },
-            },
-        });
+        const [region] = await db.$queryRaw<RegionViewRow[]>`
+            SELECT
+                r.id,
+                r.name,
+                r.description,
+                COUNT(DISTINCT p.id)::int AS "parkCount",
+                COUNT(t.id)::int AS "trailCount"
+            FROM "Region" r
+            LEFT JOIN "Park" p ON p."regionId" = r.id
+            LEFT JOIN "Trail" t ON t."parkId" = p.id
+            WHERE r.id = ${id}
+            GROUP BY r.id
+        `;
         if (!region) return null;
-        return RegionViewModelSchema.parse({
-            id: region.id,
-            name: region.name,
-            description: region.description,
-            parkCount: region._count.parks,
-            trailCount: region.parks.reduce(
-                (acc, park) => acc + park._count.trails,
-                0,
-            ),
-        });
+        return this.mapRegionViewModel(region);
     }
 
     /**
-     * Get all regions view models.
+     * Get all regions view models (park/trail counts via a single aggregate query).
      * @param search - The search query.
-     * @returns The regions view models. If no regions are found, returns null.
+     * @returns The regions view models.
      */
     async getRegionsViewModels(
         search: string | undefined,
-    ): Promise<RegionViewModel[] | null> {
-        const regions = await db.region.findMany({
-            where: {
-                name: search
-                    ? {
-                          contains: search,
-                          mode: "insensitive",
-                      }
-                    : undefined,
-            },
-            select: {
-                id: true,
-                name: true,
-                description: true,
-                _count: {
-                    select: {
-                        parks: true,
-                    },
-                },
-                parks: {
-                    select: {
-                        id: true,
-                        name: true,
-                        description: true,
-                        _count: {
-                            select: {
-                                trails: true,
-                            },
-                        },
-                    },
-                },
-            },
+    ): Promise<RegionViewModel[]> {
+        const whereClause = search
+            ? Prisma.sql`WHERE r.name ILIKE ${`%${search}%`}`
+            : Prisma.empty;
+
+        const regions = await db.$queryRaw<RegionViewRow[]>`
+            SELECT
+                r.id,
+                r.name,
+                r.description,
+                COUNT(DISTINCT p.id)::int AS "parkCount",
+                COUNT(t.id)::int AS "trailCount"
+            FROM "Region" r
+            LEFT JOIN "Park" p ON p."regionId" = r.id
+            LEFT JOIN "Trail" t ON t."parkId" = p.id
+            ${whereClause}
+            GROUP BY r.id
+            ORDER BY r.name ASC
+        `;
+
+        return regions.map((region) => this.mapRegionViewModel(region));
+    }
+
+    private mapRegionViewModel(row: RegionViewRow): RegionViewModel {
+        return RegionViewModelSchema.parse({
+            id: row.id,
+            name: row.name,
+            description: row.description,
+            parkCount: Number(row.parkCount),
+            trailCount: Number(row.trailCount),
         });
-        return regions.map((region) =>
-            RegionViewModelSchema.parse({
-                id: region.id,
-                name: region.name,
-                description: region.description,
-                parkCount: region._count.parks,
-                trailCount: region.parks.reduce(
-                    (acc, park) => acc + park._count.trails,
-                    0,
-                ),
-            }),
-        );
     }
 }
 
